@@ -9,6 +9,7 @@ use piston::event_loop::*;
 use piston::input::*;
 use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{GlGraphics, OpenGL};
+use graphics::context::Context;
 use rand::{Rand, Rng, SeedableRng, StdRng};
 use rand::distributions::{IndependentSample, Range};
 
@@ -16,7 +17,7 @@ const WINDOW_TITLE: &'static str = "FUTRIS";
 const TILE_SIZE: i32 = 32;
 const BOARD_WIDTH: i32 = 10;
 const BOARD_HEIGHT: i32 = 30;
-const INITIAL_MS_PER_DROP: i32 = 10;
+const INITIAL_MS_PER_DROP: f32 = 10.0;
 
 pub struct Tetris {
     gl: GlGraphics, // OpenGL drawing backend.
@@ -27,24 +28,55 @@ impl Tetris {
     fn render(&mut self, args: &RenderArgs) {
         use graphics::*;
 
-        const RED: [f32; 4] = [0.95, 0.26, 0.21, 1.0];
-
-        let square = rectangle::square(0.0, 0.0, 50.0);
-        let rotation = 0.0;
-        let (x, y) = ((args.width / 2) as f64, (args.height / 2) as f64);
+        self.board.dead_tiles = vec![
+            Box::new(DeadTile {
+                x: 0,
+                y: 2,
+                shape: TetriminoShape::I,
+            }),
+            Box::new(DeadTile {
+                x: 1,
+                y: 2,
+                shape: TetriminoShape::J,
+            }),
+            Box::new(DeadTile {
+                x: 2,
+                y: 2,
+                shape: TetriminoShape::L,
+            }),
+            Box::new(DeadTile {
+                x: 3,
+                y: 2,
+                shape: TetriminoShape::O,
+            }),
+            Box::new(DeadTile {
+                x: 4,
+                y: 2,
+                shape: TetriminoShape::S,
+            }),
+            Box::new(DeadTile {
+                x: 5,
+                y: 2,
+                shape: TetriminoShape::T,
+            }),
+            Box::new(DeadTile {
+                x: 6,
+                y: 2,
+                shape: TetriminoShape::Z,
+            }),
+        ];
 
         let bgc = self.background_color;
+        let ref board = self.board;
+        let ref dead_tiles: Vec<Box<DeadTile>> = board.dead_tiles;
+
         self.gl.draw(args.viewport(), |c, gl| {
             // Clear the screen.
             clear(bgc, gl);
 
-            let transform = c.transform
-                             .trans(x, y)
-                             .rot_rad(rotation)
-                             .trans(-25.0, -25.0);
-
-            // Draw a box rotating around the middle of the screen.
-            rectangle(RED, square, transform, gl);
+            for dead_tile in dead_tiles {
+                dead_tile.draw(TILE_SIZE, c.transform, c, gl);
+            }
         });
     }
 
@@ -52,6 +84,7 @@ impl Tetris {
         // Rotate 2 radians per second.
         //self.rotation += 2.0 * args.dt;
     }
+
 }
 
 fn main() {
@@ -68,7 +101,7 @@ fn main() {
 
     let seed: &[_] = &[1,2,3,4];
     let mut rng: StdRng = SeedableRng::from_seed(seed);
-    let mut board = Board::initial_board(rng);
+    let board = Board::initial_board(rng);
     // Create a new game and run it.
     let mut tetris = Tetris {
         gl: GlGraphics::new(opengl),
@@ -120,7 +153,7 @@ impl Action {
 struct Board {
     dead_tiles: Vec<Box<DeadTile>>,
     tetrimino: Tetrimino,
-    ms_per_drop: i32,
+    ms_per_drop: f32,
 }
 
 impl Board {
@@ -140,7 +173,7 @@ impl Board {
         Tetrimino {
             x: BOARD_WIDTH / 2,
             y: 0,
-            shape: Box::new(rng.gen::<Shape>()),
+            shape: Box::new(rng.gen::<TetriminoShape>()),
             rotation: 0,
         }
     }
@@ -151,21 +184,38 @@ struct DeadTile {
     x: i32,
     y: i32,
     // this is included for the color.
-    shape: Shape,
+    shape: TetriminoShape,
+}
+
+impl DeadTile {
+    fn draw(&self, tile_size: i32, global_transform: graphics::math::Matrix2d, c: Context, gl: &mut GlGraphics) -> () {
+        use graphics::*;
+        let square = rectangle::square(0.0, 0.0, tile_size as f64);
+
+        let transform = c.transform
+            .trans((self.x * tile_size) as f64, (self.y * tile_size) as f64);
+
+        rectangle(self.shape.color(), square, transform, gl);
+    }
 }
 
 /// The active tetrimino.
 struct Tetrimino {
     x: i32,
     y: i32,
-    shape: Box<Shape>,
+    shape: Box<TetriminoShape>,
     rotation: i32, // clockwise rotations.
 }
 
 impl Tetrimino {
-    fn draw_tetrimino(&self) -> () {
-        println!("hey");
-    }
+    // fn to_rects(&self, tile_width: i32, tile_heigth:i32) -> graphics::rectangle::Rectangle {
+    //     self.shape.tiles()
+    //     graphics::rectangle::Rectangle {
+    //         color: self.shape.color(),
+    //         shape: graphics::rectangle::Shape::Square,
+    //         border: None,
+    //     }
+    // }
 
     fn handle_action(&mut self, action: Action) -> () {
         let (mov_y, mov_x): (i32, i32) = action.transpose();
@@ -175,7 +225,7 @@ impl Tetrimino {
         self.rotation += rotation;
     }
 }
-enum Shape {
+enum TetriminoShape {
     I,
     O,
     T,
@@ -185,27 +235,27 @@ enum Shape {
     L,
 }
 
-impl Shape {
+impl TetriminoShape {
     fn name(&self) -> char {
         match *self {
-            Shape::I => 'I',
-            Shape::O => 'O',
-            Shape::T => 'T',
-            Shape::S => 'S',
-            Shape::Z => 'Z',
-            Shape::J => 'J',
-            Shape::L => 'L',
+            TetriminoShape::I => 'I',
+            TetriminoShape::O => 'O',
+            TetriminoShape::T => 'T',
+            TetriminoShape::S => 'S',
+            TetriminoShape::Z => 'Z',
+            TetriminoShape::J => 'J',
+            TetriminoShape::L => 'L',
         }
     }
     fn color(&self) -> [f32; 4] {
         match *self {
-            Shape::I => [0.95, 0.26, 0.21, 1.0], // red
-            Shape::O => [0.13, 0.59, 0.95, 1.0], // blue
-            Shape::T => [0.80, 0.86, 0.22, 1.0], // lime
-            Shape::S => [0.00, 0.73, 0.83, 1.0], // cyan
-            Shape::Z => [1.00, 0.60, 0.00, 1.0], // orange
-            Shape::J => [1.00, 0.92, 0.23, 1.0], // yellow
-            Shape::L => [0.91, 0.11, 0.39, 1.0], // pink (should be magenta)
+            TetriminoShape::I => [0.95, 0.26, 0.21, 1.0], // red
+            TetriminoShape::O => [0.13, 0.59, 0.95, 1.0], // blue
+            TetriminoShape::T => [0.80, 0.86, 0.22, 1.0], // lime
+            TetriminoShape::S => [0.00, 0.73, 0.83, 1.0], // cyan
+            TetriminoShape::Z => [1.00, 0.60, 0.00, 1.0], // orange
+            TetriminoShape::J => [1.00, 0.92, 0.23, 1.0], // yellow
+            TetriminoShape::L => [0.91, 0.11, 0.39, 1.0], // pink (should be magenta)
         }
 
 
@@ -216,28 +266,28 @@ impl Shape {
     // 0.1 1.1
     fn tiles(&self) -> [(i32, i32); 4] {
         match *self {
-            Shape::I => [(0, 0), (1, 0), (2, 0), (3, 0)],
-            Shape::O => [(0, 0), (1, 0), (0, 1), (1, 1)],
-            Shape::T => [(0, 0), (1, 0), (2, 0), (1, 1)],
-            Shape::S => [(0, 0), (1, 0), (-1, 1), (0, 1)],
-            Shape::Z => [(0, 0), (0, 1), (1, 1), (2, 1)],
-            Shape::J => [(0, 0), (1, 0), (2, 0), (2, 1)],
-            Shape::L => [(0, 0), (1, 0), (2, 0), (0, 1)],
+            TetriminoShape::I => [(0, 0), (1, 0), (2, 0), (3, 0)],
+            TetriminoShape::O => [(0, 0), (1, 0), (0, 1), (1, 1)],
+            TetriminoShape::T => [(0, 0), (1, 0), (2, 0), (1, 1)],
+            TetriminoShape::S => [(0, 0), (1, 0), (-1, 1), (0, 1)],
+            TetriminoShape::Z => [(0, 0), (0, 1), (1, 1), (2, 1)],
+            TetriminoShape::J => [(0, 0), (1, 0), (2, 0), (2, 1)],
+            TetriminoShape::L => [(0, 0), (1, 0), (2, 0), (0, 1)],
         }
     }
 }
 
-impl Rand for Shape {
+impl Rand for TetriminoShape {
     fn rand<R: Rng>(rng: &mut R) -> Self {
-        let between: Range<i32> = Range::new(0, 6);
+        let between: Range<i32> = Range::new(0, 7);
         match between.ind_sample(rng) {
-            0 => Shape::I,
-            1 => Shape::O,
-            2 => Shape::T,
-            3 => Shape::S,
-            4 => Shape::Z,
-            5 => Shape::J,
-            6 => Shape::L,
+            0 => TetriminoShape::I,
+            1 => TetriminoShape::O,
+            2 => TetriminoShape::T,
+            3 => TetriminoShape::S,
+            4 => TetriminoShape::Z,
+            5 => TetriminoShape::J,
+            6 => TetriminoShape::L,
             _ => panic!("what"),
         }
     }
