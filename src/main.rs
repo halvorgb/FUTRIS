@@ -28,55 +28,13 @@ impl Tetris {
     fn render(&mut self, args: &RenderArgs) {
         use graphics::*;
 
-        self.board.dead_tiles = vec![
-            Box::new(DeadTile {
-                x: 0,
-                y: 2,
-                shape: TetriminoShape::I,
-            }),
-            Box::new(DeadTile {
-                x: 2,
-                y: 4,
-                shape: TetriminoShape::J,
-            }),
-            Box::new(DeadTile {
-                x: 4,
-                y: 6,
-                shape: TetriminoShape::L,
-            }),
-            Box::new(DeadTile {
-                x: 6,
-                y: 8,
-                shape: TetriminoShape::O,
-            }),
-            Box::new(DeadTile {
-                x: 8,
-                y: 10,
-                shape: TetriminoShape::S,
-            }),
-            Box::new(DeadTile {
-                x: 10,
-                y: 12,
-                shape: TetriminoShape::T,
-            }),
-            Box::new(DeadTile {
-                x: 12,
-                y: 14,
-                shape: TetriminoShape::Z,
-            }),
-        ];
-
         let bgc = self.background_color;
         let ref board = self.board;
-        let ref dead_tiles: Vec<Box<DeadTile>> = board.dead_tiles;
-
         self.gl.draw(args.viewport(), |c, gl| {
             // Clear the screen.
             clear(bgc, gl);
 
-            for dead_tile in dead_tiles {
-                dead_tile.draw(TILE_SIZE, c.transform, c, gl);
-            }
+            board.render_board(TILE_SIZE, c.transform, c, gl);
         });
     }
 
@@ -162,11 +120,58 @@ impl Board {
     }
 
     fn initial_board(rng: StdRng) -> Board {
+        let initial_dead_tiles = vec![
+            Box::new(DeadTile {
+                x: 0,
+                y: 2,
+                shape: TetriminoShape::I,
+            }),
+            Box::new(DeadTile {
+                x: 2,
+                y: 4,
+                shape: TetriminoShape::J,
+            }),
+            Box::new(DeadTile {
+                x: 4,
+                y: 6,
+                shape: TetriminoShape::L,
+            }),
+            Box::new(DeadTile {
+                x: 6,
+                y: 8,
+                shape: TetriminoShape::O,
+            }),
+            Box::new(DeadTile {
+                x: 8,
+                y: 10,
+                shape: TetriminoShape::S,
+            }),
+            Box::new(DeadTile {
+                x: 10,
+                y: 12,
+                shape: TetriminoShape::T,
+            }),
+            Box::new(DeadTile {
+                x: 12,
+                y: 14,
+                shape: TetriminoShape::Z,
+            }),
+        ];
+
         Board {
-            dead_tiles: Vec::new(),
+            dead_tiles: initial_dead_tiles,
             tetrimino: Board::random_tetrimino(rng),
             ms_per_drop: INITIAL_MS_PER_DROP,
         }
+    }
+
+    fn render_board(&self, tile_size: i32, global_transform: graphics::math::Matrix2d, c: Context, gl: &mut GlGraphics) -> () {
+
+        let ref dead_tiles: Vec<Box<DeadTile>> = self.dead_tiles;
+        for dead_tile in dead_tiles {
+            dead_tile.draw(TILE_SIZE, c.transform, c, gl);
+        }
+
     }
 
     fn random_tetrimino(mut rng: StdRng) -> Tetrimino {
