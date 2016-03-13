@@ -35,33 +35,33 @@ impl Tetris {
                 shape: TetriminoShape::I,
             }),
             Box::new(DeadTile {
-                x: 1,
-                y: 2,
+                x: 2,
+                y: 4,
                 shape: TetriminoShape::J,
             }),
             Box::new(DeadTile {
-                x: 2,
-                y: 2,
+                x: 4,
+                y: 6,
                 shape: TetriminoShape::L,
             }),
             Box::new(DeadTile {
-                x: 3,
-                y: 2,
+                x: 6,
+                y: 8,
                 shape: TetriminoShape::O,
             }),
             Box::new(DeadTile {
-                x: 4,
-                y: 2,
+                x: 8,
+                y: 10,
                 shape: TetriminoShape::S,
             }),
             Box::new(DeadTile {
-                x: 5,
-                y: 2,
+                x: 10,
+                y: 12,
                 shape: TetriminoShape::T,
             }),
             Box::new(DeadTile {
-                x: 6,
-                y: 2,
+                x: 12,
+                y: 14,
                 shape: TetriminoShape::Z,
             }),
         ];
@@ -191,11 +191,21 @@ impl DeadTile {
     fn draw(&self, tile_size: i32, global_transform: graphics::math::Matrix2d, c: Context, gl: &mut GlGraphics) -> () {
         use graphics::*;
         let square = rectangle::square(0.0, 0.0, tile_size as f64);
+        let border = rectangle::Border{
+            color: [0.0, 0.0, 0.0, 1.0],
+            radius: 1.0,
+        };
+
+        let rectangle = rectangle::Rectangle {
+            color: self.shape.color(),
+            shape: rectangle::Shape::Square,
+            border: Some(border),
+        };
 
         let transform = c.transform
             .trans((self.x * tile_size) as f64, (self.y * tile_size) as f64);
 
-        rectangle(self.shape.color(), square, transform, gl);
+        rectangle.draw(square, &DrawState::new(), transform, gl);
     }
 }
 
