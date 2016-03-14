@@ -17,16 +17,19 @@ use rand::distributions::{IndependentSample, Range};
 const WINDOW_TITLE: &'static str = "FUTRIS";
 const TILE_SIZE: i32 = 32;
 const BOARD_OFFSET_X: i32 = 2;
-const BOARD_OFFSET_Y: i32 = 1;
+const BOARD_OFFSET_Y: i32 = 2;
 const BOARD_WIDTH: i32 = 10;
 const BOARD_HEIGHT: i32 = 30;
-const INITIAL_MS_PER_DROP: f32 = 10.0;
+const INITIAL_S_PER_DROP: f64 = 0.8;
+const MINIMUM_S_PER_DROP: f64 = 0.05;
 
 pub struct Futris {
     gl: GlGraphics, // OpenGL drawing backend.
     draw_state: DrawState,
     background_color: [f32; 4],
     board: Board, // the game state
+    lag: f64,
+    s_per_drop: f64,
 }
 impl Futris {
     fn render(&mut self, args: &RenderArgs) {
@@ -44,8 +47,11 @@ impl Futris {
     }
 
     fn update(&mut self, args: &UpdateArgs) {
-        // Rotate 2 radians per second.
-        //self.rotation += 2.0 * args.dt;
+        self.lag += args.dt;
+        if self.lag > self.s_per_drop {
+            self.lag -= self.s_per_drop;
+            println!("drop it!")
+        }
     }
 
 }
@@ -72,6 +78,8 @@ fn main() {
         draw_state: DrawState::new(),
         background_color: [0.06, 0.04, 0.08, 1.0],
         board: board,
+        lag: 0.0,
+        s_per_drop: INITIAL_S_PER_DROP,
     };
 
     let mut events = window.events();
@@ -139,7 +147,7 @@ impl Action {
 struct Board {
     dead_tiles: Vec<Box<DeadTile>>,
     tetrimino: Tetrimino,
-    ms_per_drop: f32,
+    points: i32,
     offset_x: i32,
     offset_y: i32,
     width: i32,
@@ -153,73 +161,6 @@ impl Board {
 
     fn initial_board<R: Rng>(offset_x: i32, offset_y: i32, width: i32, height: i32, rng: R) -> Board {
         let initial_dead_tiles = vec![
-            Box::new(DeadTile {
-                x: 0,
-                y: 2,
-                shape: Shape::I,
-            }),
-            Box::new(DeadTile {
-                x: 1,
-                y: 2,
-                shape: Shape::I,
-            }),
-
-            Box::new(DeadTile {
-                x: 2,
-                y: 2,
-                shape: Shape::I,
-            }),
-
-            Box::new(DeadTile {
-                x: 3,
-                y: 2,
-                shape: Shape::I,
-            }),
-
-            Box::new(DeadTile {
-                x: 4,
-                y: 2,
-                shape: Shape::I,
-            }),
-
-            Box::new(DeadTile {
-                x: 5,
-                y: 2,
-                shape: Shape::I,
-            }),
-
-            Box::new(DeadTile {
-                x: 6,
-                y: 2,
-                shape: Shape::I,
-            }),
-            Box::new(DeadTile {
-                x: 7,
-                y: 2,
-                shape: Shape::I,
-            }),
-            Box::new(DeadTile {
-                x: 8,
-                y: 2,
-                shape: Shape::I,
-            }),
-            Box::new(DeadTile {
-                x: 9,
-                y: 2,
-                shape: Shape::I,
-            }),
-
-
-            Box::new(DeadTile {
-                x: 2,
-                y: 4,
-                shape: Shape::J,
-            }),
-            Box::new(DeadTile {
-                x: 4,
-                y: 6,
-                shape: Shape::L,
-            }),
             Box::new(DeadTile {
                 x: 6,
                 y: 8,
@@ -245,7 +186,7 @@ impl Board {
         Board {
             dead_tiles: initial_dead_tiles,
             tetrimino: Board::random_tetrimino(width, rng),
-            ms_per_drop: INITIAL_MS_PER_DROP,
+            points: 0,
             offset_x: offset_x,
             offset_y: offset_y,
             width: width,
