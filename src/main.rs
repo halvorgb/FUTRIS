@@ -22,13 +22,13 @@ const BOARD_WIDTH: i32 = 10;
 const BOARD_HEIGHT: i32 = 30;
 const INITIAL_MS_PER_DROP: f32 = 10.0;
 
-pub struct Tetris {
+pub struct Futris {
     gl: GlGraphics, // OpenGL drawing backend.
     draw_state: DrawState,
     background_color: [f32; 4],
     board: Board, // the game state
 }
-impl Tetris {
+impl Futris {
     fn render(&mut self, args: &RenderArgs) {
         use graphics::*;
 
@@ -67,7 +67,7 @@ fn main() {
     //let mut rng: StdRng = SeedableRng::from_seed(seed);
     let board = Board::initial_board(BOARD_OFFSET_X, BOARD_OFFSET_Y, BOARD_WIDTH, BOARD_HEIGHT, rng);
     // Create a new game and run it.
-    let mut tetris = Tetris {
+    let mut futris = Futris {
         gl: GlGraphics::new(opengl),
         draw_state: DrawState::new(),
         background_color: [0.06, 0.04, 0.08, 1.0],
@@ -77,11 +77,11 @@ fn main() {
     let mut events = window.events();
     while let Some(e) = events.next(&mut window) {
         if let Some(r) = e.render_args() {
-            tetris.render(&r);
+            futris.render(&r);
         }
 
         if let Some(u) = e.update_args() {
-            tetris.update(&u);
+            futris.update(&u);
         }
     }
 }
