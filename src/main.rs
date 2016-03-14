@@ -16,6 +16,8 @@ use rand::distributions::{IndependentSample, Range};
 
 const WINDOW_TITLE: &'static str = "FUTRIS";
 const TILE_SIZE: i32 = 32;
+const BOARD_OFFSET_X: i32 = 2;
+const BOARD_OFFSET_Y: i32 = 1;
 const BOARD_WIDTH: i32 = 10;
 const BOARD_HEIGHT: i32 = 30;
 const INITIAL_MS_PER_DROP: f32 = 10.0;
@@ -37,7 +39,7 @@ impl Tetris {
             // Clear the screen.
             clear(bgc, gl);
 
-            board.render_board(TILE_SIZE, c.transform, c, draw_state, gl);
+            board.render_board(TILE_SIZE, BOARD_WIDTH, BOARD_HEIGHT, c, draw_state, gl);
         });
     }
 
@@ -60,14 +62,15 @@ fn main() {
                                  .unwrap();
 
 
-    let seed: &[_] = &[1,2,3,4];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
-    let board = Board::initial_board(rng);
+    let rng = rand::thread_rng();
+    //let seed: &[_] = &[initial_rng.gen::<i32>(), initial_rng.gen::<i32>()];
+    //let mut rng: StdRng = SeedableRng::from_seed(seed);
+    let board = Board::initial_board(BOARD_OFFSET_X, BOARD_OFFSET_Y, BOARD_WIDTH, BOARD_HEIGHT, rng);
     // Create a new game and run it.
     let mut tetris = Tetris {
         gl: GlGraphics::new(opengl),
         draw_state: DrawState::new(),
-        background_color: [0.1, 0.08, 0.12, 1.0],
+        background_color: [0.06, 0.04, 0.08, 1.0],
         board: board,
     };
 
@@ -137,6 +140,10 @@ struct Board {
     dead_tiles: Vec<Box<DeadTile>>,
     tetrimino: Tetrimino,
     ms_per_drop: f32,
+    offset_x: i32,
+    offset_y: i32,
+    width: i32,
+    height: i32,
 }
 
 impl Board {
@@ -144,13 +151,65 @@ impl Board {
         println!("MOVE!")
     }
 
-    fn initial_board(rng: StdRng) -> Board {
+    fn initial_board<R: Rng>(offset_x: i32, offset_y: i32, width: i32, height: i32, rng: R) -> Board {
         let initial_dead_tiles = vec![
             Box::new(DeadTile {
                 x: 0,
                 y: 2,
                 shape: Shape::I,
             }),
+            Box::new(DeadTile {
+                x: 1,
+                y: 2,
+                shape: Shape::I,
+            }),
+
+            Box::new(DeadTile {
+                x: 2,
+                y: 2,
+                shape: Shape::I,
+            }),
+
+            Box::new(DeadTile {
+                x: 3,
+                y: 2,
+                shape: Shape::I,
+            }),
+
+            Box::new(DeadTile {
+                x: 4,
+                y: 2,
+                shape: Shape::I,
+            }),
+
+            Box::new(DeadTile {
+                x: 5,
+                y: 2,
+                shape: Shape::I,
+            }),
+
+            Box::new(DeadTile {
+                x: 6,
+                y: 2,
+                shape: Shape::I,
+            }),
+            Box::new(DeadTile {
+                x: 7,
+                y: 2,
+                shape: Shape::I,
+            }),
+            Box::new(DeadTile {
+                x: 8,
+                y: 2,
+                shape: Shape::I,
+            }),
+            Box::new(DeadTile {
+                x: 9,
+                y: 2,
+                shape: Shape::I,
+            }),
+
+
             Box::new(DeadTile {
                 x: 2,
                 y: 4,
@@ -172,12 +231,12 @@ impl Board {
                 shape: Shape::S,
             }),
             Box::new(DeadTile {
-                x: 10,
+                x: 9,
                 y: 12,
                 shape: Shape::T,
             }),
             Box::new(DeadTile {
-                x: 12,
+                x: 8,
                 y: 14,
                 shape: Shape::Z,
             }),
@@ -185,28 +244,55 @@ impl Board {
 
         Board {
             dead_tiles: initial_dead_tiles,
-            tetrimino: Board::random_tetrimino(rng),
+            tetrimino: Board::random_tetrimino(width, rng),
             ms_per_drop: INITIAL_MS_PER_DROP,
+            offset_x: offset_x,
+            offset_y: offset_y,
+            width: width,
+            height: height,
         }
     }
 
-    fn render_board(&self, tile_size: i32, global_transform: graphics::math::Matrix2d, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
+    fn render_board(&self, tile_size: i32, board_width: i32, board_height: i32, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
         // 1. render playfield (i.e. the big rectangle where tetriminos are allowed to move.
+        self.draw_playfield(tile_size, board_width, board_height, c, draw_state, gl);
+
         // 2. render the active tetrimino
+        let ref tetrimino = self.tetrimino;
+        tetrimino.draw(self.offset_x, self.offset_y, TILE_SIZE, c, draw_state, gl);
 
         // 3. render dead tiles
         let ref dead_tiles: Vec<Box<DeadTile>> = self.dead_tiles;
         for dead_tile in dead_tiles {
-            dead_tile.draw(TILE_SIZE, c.transform, c, draw_state, gl);
+            dead_tile.draw(self.offset_x, self.offset_y, TILE_SIZE, c, draw_state, gl);
         }
 
     }
 
-    fn random_tetrimino(mut rng: StdRng) -> Tetrimino {
+    fn draw_playfield(&self, tile_size: i32, board_width: i32, board_height: i32, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
+        use graphics::*;
+        let area: [f64; 4] = [(self.offset_x * tile_size) as f64,
+                              (self.offset_y * tile_size) as f64,
+                              (board_width * tile_size) as f64,
+                              (board_height * tile_size) as f64];
+
+        let rectangle = rectangle::Rectangle {
+            color: [0.1, 0.08, 0.12, 1.0],
+            shape: rectangle::Shape::Square,
+            border: None,
+        };
+
+        let transform = c.transform;
+
+        rectangle.draw(area, draw_state, transform, gl);
+    }
+
+    fn random_tetrimino<R: Rng>(width: i32, mut rng: R) -> Tetrimino {
+        let shape: Box<Shape> = Box::new(rng.gen::<Shape>());
         Tetrimino {
-            x: BOARD_WIDTH / 2,
+            x: shape.origin(width),
             y: 0,
-            shape: Box::new(rng.gen::<Shape>()),
+            shape: shape,
             rotation: 0,
         }
     }
@@ -221,8 +307,8 @@ struct DeadTile {
 }
 
 impl DeadTile {
-   fn draw(&self, tile_size: i32, global_transform: graphics::math::Matrix2d, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
-       draw_square(tile_size, self.x, self.y, self.shape.color(), c, draw_state, gl);
+   fn draw(&self, offset_x: i32, offset_y: i32, tile_size: i32, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
+       draw_square(tile_size, self.x + offset_x, self.y + offset_y, self.shape.color(), c, draw_state, gl);
     }
  }
 
@@ -235,17 +321,14 @@ struct Tetrimino {
 }
 
 impl Tetrimino {
-    fn draw(&self, tile_size: i32, global_transform: graphics::math::Matrix2d, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
+    fn draw(&self, offset_x: i32, offset_y: i32, tile_size: i32, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
         use graphics::*;
+        for tile in &self.shape.tiles() {
+            let x = self.x + tile.0 + offset_x;
+            let y = self.y + tile.1 + offset_y;
+            draw_square(tile_size, x, y, self.shape.color(), c, draw_state, gl);
+        }
     }
-    // fn to_rects(&self, tile_width: i32, tile_heigth:i32) -> graphics::rectangle::Rectangle {
-    //     self.shape.tiles()
-    //     graphics::rectangle::Rectangle {
-    //         color: self.shape.color(),
-    //         shape: graphics::rectangle::Shape::Square,
-    //         border: None,
-    //     }
-    // }
 
     fn handle_action(&mut self, action: Action) -> () {
         let (mov_y, mov_x): (i32, i32) = action.transpose();
@@ -277,6 +360,7 @@ impl Shape {
             Shape::L => 'L',
         }
     }
+
     fn color(&self) -> [f32; 4] {
         match *self {
             Shape::I => [0.95, 0.26, 0.21, 1.0], // red
@@ -291,9 +375,6 @@ impl Shape {
 
     }
 
-    // tiles: an array of length 4 with relative positions to origin (top left of spawn)
-    // 0.0 1.0
-    // 0.1 1.1
     fn tiles(&self) -> [(i32, i32); 4] {
         match *self {
             Shape::I => [(0, 0), (1, 0), (2, 0), (3, 0)],
@@ -303,6 +384,18 @@ impl Shape {
             Shape::Z => [(0, 0), (0, 1), (1, 1), (2, 1)],
             Shape::J => [(0, 0), (1, 0), (2, 0), (2, 1)],
             Shape::L => [(0, 0), (1, 0), (2, 0), (0, 1)],
+        }
+    }
+
+    fn origin(&self, board_width: i32) -> i32 {
+        match *self {
+            Shape::I => board_width/2 - 2,
+            Shape::O => board_width/2 - 2,
+            Shape::T => board_width/2 - 2,
+            Shape::S => board_width/2 - 1,
+            Shape::Z => board_width/2 - 2,
+            Shape::J => board_width/2 - 2,
+            Shape::L => board_width/2 - 2,
         }
     }
 }
