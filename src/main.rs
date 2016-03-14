@@ -290,18 +290,6 @@ enum Shape {
 }
 
 impl Shape {
-    fn name(&self) -> char {
-        match *self {
-            Shape::I => 'I',
-            Shape::O => 'O',
-            Shape::T => 'T',
-            Shape::S => 'S',
-            Shape::Z => 'Z',
-            Shape::J => 'J',
-            Shape::L => 'L',
-        }
-    }
-
     fn color(&self) -> [f32; 4] {
         match *self {
             Shape::I => [0.95, 0.26, 0.21, 1.0], // red
