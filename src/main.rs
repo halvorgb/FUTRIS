@@ -310,13 +310,13 @@ impl Shape {
 
     fn color(&self) -> [f32; 4] {
         match *self {
-            Shape::I => [0.95, 0.26, 0.21, 1.0], // red
-            Shape::O => [0.13, 0.59, 0.95, 1.0], // blue
-            Shape::T => [0.80, 0.86, 0.22, 1.0], // lime
-            Shape::S => [0.00, 0.73, 0.83, 1.0], // cyan
-            Shape::Z => [1.00, 0.60, 0.00, 1.0], // orange
-            Shape::J => [1.00, 0.92, 0.23, 1.0], // yellow
-            Shape::L => [0.91, 0.11, 0.39, 1.0], // pink (should be magenta)
+            Shape::I => [0.00, 0.73, 0.83, 1.0], // cyan
+            Shape::O => [1.00, 0.92, 0.23, 1.0], // yellow
+            Shape::T => [0.61, 0.15, 0.69, 1.0], // purple
+            Shape::S => [0.55, 0.76, 0.29, 1.0], // light green
+            Shape::Z => [0.95, 0.26, 0.21, 1.0], // red
+            Shape::J => [0.13, 0.59, 0.95, 1.0], // blue
+            Shape::L => [1.00, 0.60, 0.00, 1.0], // orange
         }
     }
 
