@@ -11,7 +11,7 @@ use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{GlGraphics, OpenGL};
 use graphics::DrawState;
 use graphics::context::Context;
-use rand::{Rand, Rng, SeedableRng, StdRng};
+use rand::{Rand, Rng, SeedableRng, ThreadRng};
 use rand::distributions::{IndependentSample, Range};
 
 const WINDOW_TITLE: &'static str = "FUTRIS";
@@ -20,7 +20,7 @@ const BOARD_OFFSET_X: i32 = 2;
 const BOARD_OFFSET_Y: i32 = 2;
 const BOARD_WIDTH: i32 = 10;
 const BOARD_HEIGHT: i32 = 30;
-const INITIAL_S_PER_DROP: f64 = 0.8;
+const INITIAL_S_PER_DROP: f64 = 0.20;
 const MINIMUM_S_PER_DROP: f64 = 0.05;
 
 pub struct Futris {
@@ -31,6 +31,7 @@ pub struct Futris {
     lag: f64,
     s_per_drop: f64,
 }
+
 impl Futris {
     fn render(&mut self, args: &RenderArgs) {
         use graphics::*;
@@ -68,10 +69,9 @@ fn main() {
                                  .unwrap();
 
 
-    let rng = rand::thread_rng();
-    //let seed: &[_] = &[initial_rng.gen::<i32>(), initial_rng.gen::<i32>()];
-    //let mut rng: StdRng = SeedableRng::from_seed(seed);
+    let rng: ThreadRng = rand::thread_rng();
     let board = Board::initial_board(BOARD_OFFSET_X, BOARD_OFFSET_Y, BOARD_WIDTH, BOARD_HEIGHT, rng);
+
     // Create a new game and run it.
     let mut futris = Futris {
         gl: GlGraphics::new(opengl),
@@ -228,8 +228,10 @@ impl Board {
         rectangle.draw(area, draw_state, transform, gl);
     }
 
-    fn random_tetrimino<R: Rng>(width: i32, mut rng: R) -> Tetrimino {
-        let shape: Box<Shape> = Box::new(rng.gen::<Shape>());
+    fn random_tetrimino(width: i32) -> Tetrimino {
+
+        let mut rng = rand::thread_rng();
+        let shape: Shape = rng.gen::<Shape>();
         Tetrimino {
             x: shape.origin(width),
             y: 0,
@@ -257,7 +259,7 @@ impl DeadTile {
 struct Tetrimino {
     x: i32,
     y: i32,
-    shape: Box<Shape>,
+    shape: Shape,
     rotation: i32, // clockwise rotations.
 }
 
