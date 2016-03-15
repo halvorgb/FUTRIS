@@ -115,34 +115,6 @@ fn draw_square(tile_size: i32, x: i32, y: i32, color: [f32; 4],
     rectangle.draw(square, draw_state, transform, gl);
 }
 
-enum Action {
-    MOVL,
-    MOVR,
-    DROP,
-    ROTR,
-    ROTL,
-}
-
-impl Action {
-    fn transpose(&self) -> (i32, i32) {
-        match *self {
-            Action::MOVL => (-1, 0),
-            Action::MOVR => (1, 0),
-            Action::DROP => (0, 1),
-            _ => (0, 0),
-        }
-    }
-
-    fn rotate(&self) -> (i32) {
-        match *self {
-            Action::ROTR => 1,
-            Action::ROTL => -1,
-            _ => 0,
-        }
-    }
-
-}
-
 /// The board itself.
 struct Board {
     dead_tiles: Vec<Box<DeadTile>>,
