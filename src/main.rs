@@ -51,7 +51,7 @@ impl Futris {
         self.lag += args.dt;
         if self.lag > self.s_per_drop {
             self.lag -= self.s_per_drop;
-            println!("drop it!")
+            self.board.drop_tetrimino();
         }
     }
 
@@ -159,33 +159,30 @@ impl Board {
         println!("MOVE!")
     }
 
-    fn initial_board<R: Rng>(offset_x: i32, offset_y: i32, width: i32, height: i32, rng: R) -> Board {
-        let initial_dead_tiles = vec![
-            Box::new(DeadTile {
-                x: 6,
-                y: 8,
-                shape: Shape::O,
-            }),
-            Box::new(DeadTile {
-                x: 8,
-                y: 10,
-                shape: Shape::S,
-            }),
-            Box::new(DeadTile {
-                x: 9,
-                y: 12,
-                shape: Shape::T,
-            }),
-            Box::new(DeadTile {
-                x: 8,
-                y: 14,
-                shape: Shape::Z,
-            }),
-        ];
+    fn drop_tetrimino(&mut self) -> () {
+        // check if tetrmino is resting on the bottom of the playfield or on a dead tile
+        if self.tetrimino.tiles().iter()
+            .any(|t| self.dead_tiles.iter().any(|d| t.0 == d.x && t.1 + 1 == d.y)
+                 || t.1 + 1 == self.height) {
+                for tile in self.tetrimino.tiles().iter() {
+                    let shape: Shape = self.tetrimino.shape.copy();
+                    self.dead_tiles.push(Box::new(DeadTile {
+                        x: tile.0,
+                        y: tile.1,
+                        shape: shape,
+                    }));
+                }
+                self.tetrimino = Board::random_tetrimino(self.width);
+        } else {
+            self.tetrimino.y += 1;
+        }
+    }
 
+    fn initial_board(offset_x: i32, offset_y: i32, width: i32, height: i32, rng: ThreadRng) -> Board {
+        let tetrimino = Board::random_tetrimino(width);
         Board {
-            dead_tiles: initial_dead_tiles,
-            tetrimino: Board::random_tetrimino(width, rng),
+            dead_tiles: Vec::new(),
+            tetrimino: tetrimino,
             points: 0,
             offset_x: offset_x,
             offset_y: offset_y,
@@ -280,6 +277,13 @@ impl Tetrimino {
         self.y += mov_y;
         self.rotation += rotation;
     }
+
+    fn tiles(&self) -> Vec<(i32, i32)> {
+        self.shape.tiles()
+            .iter()
+            .map(|t| (t.0 + self.x, t.1 + self.y))
+            .collect()
+    }
 }
 enum Shape {
     I,
@@ -292,6 +296,18 @@ enum Shape {
 }
 
 impl Shape {
+    fn copy(&self) -> Shape {
+        match *self {
+            Shape::I => Shape::I,
+            Shape::O => Shape::O,
+            Shape::T => Shape::T,
+            Shape::S => Shape::S,
+            Shape::Z => Shape::Z,
+            Shape::J => Shape::J,
+            Shape::L => Shape::L,
+        }
+    }
+
     fn color(&self) -> [f32; 4] {
         match *self {
             Shape::I => [0.95, 0.26, 0.21, 1.0], // red
@@ -302,19 +318,17 @@ impl Shape {
             Shape::J => [1.00, 0.92, 0.23, 1.0], // yellow
             Shape::L => [0.91, 0.11, 0.39, 1.0], // pink (should be magenta)
         }
-
-
     }
 
-    fn tiles(&self) -> [(i32, i32); 4] {
+    fn tiles(&self) -> Vec<(i32, i32)> {
         match *self {
-            Shape::I => [(0, 0), (1, 0), (2, 0), (3, 0)],
-            Shape::O => [(0, 0), (1, 0), (0, 1), (1, 1)],
-            Shape::T => [(0, 0), (1, 0), (2, 0), (1, 1)],
-            Shape::S => [(0, 0), (1, 0), (-1, 1), (0, 1)],
-            Shape::Z => [(0, 0), (0, 1), (1, 1), (2, 1)],
-            Shape::J => [(0, 0), (1, 0), (2, 0), (2, 1)],
-            Shape::L => [(0, 0), (1, 0), (2, 0), (0, 1)],
+            Shape::I => vec![(0, 0), (1, 0), (2, 0), (3, 0)],
+            Shape::O => vec![(0, 0), (1, 0), (0, 1), (1, 1)],
+            Shape::T => vec![(0, 0), (1, 0), (2, 0), (1, 1)],
+            Shape::S => vec![(0, 0), (1, 0), (-1, 1), (0, 1)],
+            Shape::Z => vec![(0, 0), (0, 1), (1, 1), (2, 1)],
+            Shape::J => vec![(0, 0), (1, 0), (2, 0), (2, 1)],
+            Shape::L => vec![(0, 0), (1, 0), (2, 0), (0, 1)],
         }
     }
 
