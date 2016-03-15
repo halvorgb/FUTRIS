@@ -20,7 +20,7 @@ const BOARD_OFFSET_X: i32 = 2;
 const BOARD_OFFSET_Y: i32 = 2;
 const BOARD_WIDTH: i32 = 10;
 const BOARD_HEIGHT: i32 = 30;
-const INITIAL_S_PER_DROP: f64 = 0.20;
+const INITIAL_S_PER_DROP: f64 = 0.10;
 const MINIMUM_S_PER_DROP: f64 = 0.05;
 
 pub struct Futris {
@@ -33,7 +33,7 @@ pub struct Futris {
 }
 
 impl Futris {
-    fn render(&mut self, args: &RenderArgs) {
+    fn render(&mut self, args: &RenderArgs) -> () {
         use graphics::*;
 
         let bgc = self.background_color;
@@ -47,11 +47,30 @@ impl Futris {
         });
     }
 
-    fn update(&mut self, args: &UpdateArgs) {
+    fn update(&mut self, args: &UpdateArgs) -> () {
         self.lag += args.dt;
-        if self.lag > self.s_per_drop {
-            self.lag -= self.s_per_drop;
-            self.board.drop_tetrimino();
+        if self.board.in_progress {
+            if self.lag > self.s_per_drop {
+                self.lag -= self.s_per_drop;
+                self.board.gravity();
+            }
+        }
+    }
+
+    fn handle_key_input(&mut self, key: keyboard::Key) -> () {
+        match key {
+            Key::Up => self.board.rotate_tetrimino(),
+            Key::Left => self.board.move_tetrimino(-1),
+            Key::Down => self.board.gravity(),
+            Key::Right => self.board.move_tetrimino(1),
+
+            Key::W => self.board.rotate_tetrimino(),
+            Key::A => self.board.move_tetrimino(-1),
+            Key::S => self.board.gravity(),
+            Key::D => self.board.move_tetrimino(1),
+
+            Key::R => println!("HEY, lets restart!"),
+            _ => println!("hey"),
         }
     }
 
@@ -91,6 +110,10 @@ fn main() {
         if let Some(u) = e.update_args() {
             futris.update(&u);
         }
+
+        if let Some(Button::Keyboard(key)) = e.press_args() {
+            futris.handle_key_input(key);
+        }
     }
 }
 
@@ -117,6 +140,7 @@ fn draw_square(tile_size: i32, x: i32, y: i32, color: [f32; 4],
 
 /// The board itself.
 struct Board {
+    in_progress: bool,
     dead_tiles: Vec<Box<DeadTile>>,
     tetrimino: Tetrimino,
     points: i32,
@@ -127,32 +151,59 @@ struct Board {
 }
 
 impl Board {
-    fn move_tetrimino(&mut self) -> () {
-        println!("MOVE!")
+    fn rotate_tetrimino(&mut self) -> () {
+        if !self.illegal_position(self.tetrimino.tiles_rotated()) {
+            self.tetrimino.rotate();
+        }
     }
 
-    fn drop_tetrimino(&mut self) -> () {
-        // check if tetrmino is resting on the bottom of the playfield or on a dead tile
-        if self.tetrimino.tiles().iter()
-            .any(|t| self.dead_tiles.iter().any(|d| t.0 == d.x && t.1 + 1 == d.y)
-                 || t.1 + 1 == self.height) {
-                for tile in self.tetrimino.tiles().iter() {
-                    let shape: Shape = self.tetrimino.shape.copy();
-                    self.dead_tiles.push(Box::new(DeadTile {
-                        x: tile.0,
-                        y: tile.1,
-                        shape: shape,
-                    }));
-                }
-                self.tetrimino = Board::random_tetrimino(self.width);
+    fn move_tetrimino(&mut self, distance: i32) -> () {
+        if !self.illegal_position(self.tetrimino.tiles_offset((distance, 0))) {
+            self.tetrimino.x += distance;
+        }
+    }
+
+    fn gravity(&mut self) -> () {
+        if !self.in_progress {
+            return ()
+        }
+
+        // is it illegal to move the tetrimino 1 tile down?
+        if self.illegal_position(self.tetrimino.tiles_offset((0,1))) {
+            for tile in self.tetrimino.tiles().iter() {
+                let shape: Shape = self.tetrimino.shape.copy();
+                self.dead_tiles.push(Box::new(DeadTile {
+                    x: tile.0,
+                    y: tile.1,
+                    shape: shape,
+                }));
+            }
+            // if loss:
+            if self.tetrimino.y <= 0 {
+                self.in_progress = false;
+            }
+
+            self.tetrimino = Board::random_tetrimino(self.width);
+
         } else {
             self.tetrimino.y += 1;
         }
     }
 
+    fn illegal_position(&self, tetrimino_tiles: Vec<(i32, i32)>) -> bool {
+        tetrimino_tiles.iter().any(
+            |t| self.dead_tiles.iter().any(
+                |d| t.0 == d.x && t.1 == d.y) // collision with dead tile
+
+                || t.0 < 0 // too long to the left
+                || t.0 == self.width // too long to the right
+                || t.1 == self.height) // too low
+    }
+
     fn initial_board(offset_x: i32, offset_y: i32, width: i32, height: i32, rng: ThreadRng) -> Board {
         let tetrimino = Board::random_tetrimino(width);
         Board {
+            in_progress: true,
             dead_tiles: Vec::new(),
             tetrimino: tetrimino,
             points: 0,
@@ -235,27 +286,38 @@ struct Tetrimino {
 impl Tetrimino {
     fn draw(&self, offset_x: i32, offset_y: i32, tile_size: i32, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
         use graphics::*;
-        for tile in &self.shape.tiles() {
+        for tile in &self.shape.tiles(self.rotation) {
             let x = self.x + tile.0 + offset_x;
             let y = self.y + tile.1 + offset_y;
             draw_square(tile_size, x, y, self.shape.color(), c, draw_state, gl);
         }
     }
 
-    fn handle_action(&mut self, action: Action) -> () {
-        let (mov_y, mov_x): (i32, i32) = action.transpose();
-        let rotation: i32 = action.rotate();
-        self.x += mov_x;
-        self.y += mov_y;
-        self.rotation += rotation;
-    }
-
     fn tiles(&self) -> Vec<(i32, i32)> {
-        self.shape.tiles()
+        self.shape.tiles(self.rotation)
             .iter()
             .map(|t| (t.0 + self.x, t.1 + self.y))
             .collect()
     }
+    fn tiles_offset(&self, offset: (i32, i32)) -> Vec<(i32, i32)> {
+        self.shape.tiles(self.rotation)
+            .iter()
+            .map(|t| (t.0 + self.x + offset.0, t.1 + self.y + offset.1))
+            .collect()
+    }
+
+    fn rotate(&mut self) -> () {
+        self.rotation = (self.rotation + 1) % 4;
+    }
+
+    // rotation
+    fn tiles_rotated(&self) -> Vec<(i32, i32)> {
+        self.shape.tiles((self.rotation+1) % 4)
+            .iter()
+            .map(|t| (t.0 + self.x, t.1 + self.y))
+            .collect()
+    }
+
 }
 enum Shape {
     I,
@@ -292,8 +354,8 @@ impl Shape {
         }
     }
 
-    fn tiles(&self) -> Vec<(i32, i32)> {
-        match *self {
+    fn tiles(&self, rotation: i32) -> Vec<(i32, i32)> {
+        let initial_shape = match *self {
             Shape::I => vec![(0, 0), (1, 0), (2, 0), (3, 0)],
             Shape::O => vec![(0, 0), (1, 0), (0, 1), (1, 1)],
             Shape::T => vec![(0, 0), (1, 0), (2, 0), (1, 1)],
@@ -301,9 +363,17 @@ impl Shape {
             Shape::Z => vec![(0, 0), (0, 1), (1, 1), (2, 1)],
             Shape::J => vec![(0, 0), (1, 0), (2, 0), (2, 1)],
             Shape::L => vec![(0, 0), (1, 0), (2, 0), (0, 1)],
-        }
+        };
+        let rotated_shape: Vec<(i32, i32)> =
+            initial_shape.iter().map(
+                |tile| Shape::rotate_tuple(*tile, rotation)
+            ).collect::<Vec<(i32, i32)>>();
+        rotated_shape
     }
 
+    fn rotate_tuple(tuple: (i32, i32), n: i32) -> (i32, i32) {
+        (0..n).fold(tuple, |t, _| (t.1, -t.0))
+    }
     fn origin(&self, board_width: i32) -> i32 {
         match *self {
             Shape::I => board_width/2 - 2,
