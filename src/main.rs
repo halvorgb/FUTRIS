@@ -170,12 +170,12 @@ impl Board {
 
         // is it illegal to move the tetrimino 1 tile down?
         if self.illegal_position(self.tetrimino.tiles_offset((0,1))) {
+            let color = self.tetrimino.shape.color();
             for tile in self.tetrimino.tiles().iter() {
-                let shape: Shape = self.tetrimino.shape.copy();
                 self.dead_tiles.push(Box::new(DeadTile {
                     x: tile.0,
                     y: tile.1,
-                    shape: shape,
+                    color: color,
                 }));
             }
             // if loss:
@@ -265,13 +265,12 @@ impl Board {
 struct DeadTile {
     x: i32,
     y: i32,
-    // this is included for the color.
-    shape: Shape,
+    color: [f32; 4],
 }
 
 impl DeadTile {
    fn draw(&self, offset_x: i32, offset_y: i32, tile_size: i32, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
-       draw_square(tile_size, self.x + offset_x, self.y + offset_y, self.shape.color(), c, draw_state, gl);
+       draw_square(tile_size, self.x + offset_x, self.y + offset_y, self.color, c, draw_state, gl);
     }
  }
 
