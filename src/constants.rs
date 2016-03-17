@@ -1,0 +1,9 @@
+pub const WINDOW_TITLE: &'static str = "FUTRIS";
+pub const TILE_SIZE: f64 = 32.0;
+pub const BOARD_OFFSET_X: i32 = 2;
+pub const BOARD_OFFSET_Y: i32 = 2;
+pub const BOARD_WIDTH: i32 = 10;
+pub const BOARD_HEIGHT: i32 = 30;
+pub const INITIAL_S_PER_DROP: f64 = 0.10;
+pub const SCORE_PER_LINE: i32 = 40;
+// const MINIMUM_S_PER_DROP: f64 = 0.05;
