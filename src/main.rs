@@ -11,7 +11,7 @@ use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{GlGraphics, OpenGL};
 use graphics::DrawState;
 use graphics::context::Context;
-use rand::{Rand, Rng, SeedableRng, ThreadRng};
+use rand::{Rand, Rng};
 use rand::distributions::{IndependentSample, Range};
 
 const WINDOW_TITLE: &'static str = "FUTRIS";
@@ -21,7 +21,7 @@ const BOARD_OFFSET_Y: i32 = 2;
 const BOARD_WIDTH: i32 = 10;
 const BOARD_HEIGHT: i32 = 30;
 const INITIAL_S_PER_DROP: f64 = 0.10;
-const MINIMUM_S_PER_DROP: f64 = 0.05;
+//const MINIMUM_S_PER_DROP: f64 = 0.05;
 
 pub struct Futris {
     gl: GlGraphics, // OpenGL drawing backend.
@@ -88,8 +88,7 @@ fn main() {
                                  .unwrap();
 
 
-    let rng: ThreadRng = rand::thread_rng();
-    let board = Board::initial_board(rng);
+    let board = Board::initial_board();
 
     // Create a new game and run it.
     let mut futris = Futris {
@@ -199,7 +198,7 @@ impl Board {
                  || self.dead_tiles[t.0 as usize][t.1 as usize].is_some())
     }
 
-    fn initial_board(rng: ThreadRng) -> Board {
+    fn initial_board() -> Board {
         let tetrimino = Board::random_tetrimino(BOARD_WIDTH);
         Board {
             in_progress: true,
@@ -278,7 +277,6 @@ struct Tetrimino {
 
 impl Tetrimino {
     fn draw(&self, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
-        use graphics::*;
         for tile in &self.shape.tiles(self.rotation) {
             let x = self.x + tile.0 + BOARD_OFFSET_X;
             let y = self.y + tile.1 + BOARD_OFFSET_Y;
@@ -323,18 +321,6 @@ enum Shape {
 }
 
 impl Shape {
-    fn copy(&self) -> Shape {
-        match *self {
-            Shape::I => Shape::I,
-            Shape::O => Shape::O,
-            Shape::T => Shape::T,
-            Shape::S => Shape::S,
-            Shape::Z => Shape::Z,
-            Shape::J => Shape::J,
-            Shape::L => Shape::L,
-        }
-    }
-
     fn color(&self) -> [f32; 4] {
         match *self {
             Shape::I => [0.00, 0.73, 0.83, 1.0], // cyan
@@ -396,9 +382,6 @@ impl Shape {
         }
     }
 
-    fn rotate_tuple(tuple: (i32, i32), n: i32) -> (i32, i32) {
-        (0..n).fold(tuple, |t, _| (t.1, -t.0))
-    }
     fn origin(&self, board_width: i32) -> i32 {
         match *self {
             Shape::I => board_width/2 - 2,
