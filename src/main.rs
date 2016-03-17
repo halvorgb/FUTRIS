@@ -15,7 +15,7 @@ use rand::{Rand, Rng, SeedableRng, ThreadRng};
 use rand::distributions::{IndependentSample, Range};
 
 const WINDOW_TITLE: &'static str = "FUTRIS";
-const TILE_SIZE: i32 = 32;
+const TILE_SIZE: f64 = 32.0;
 const BOARD_OFFSET_X: i32 = 2;
 const BOARD_OFFSET_Y: i32 = 2;
 const BOARD_WIDTH: i32 = 10;
@@ -43,7 +43,7 @@ impl Futris {
             // Clear the screen.
             clear(bgc, gl);
 
-            board.render_board(TILE_SIZE, BOARD_WIDTH, BOARD_HEIGHT, c, draw_state, gl);
+            board.render_board(c, draw_state, gl);
         });
     }
 
@@ -89,7 +89,7 @@ fn main() {
 
 
     let rng: ThreadRng = rand::thread_rng();
-    let board = Board::initial_board(BOARD_OFFSET_X, BOARD_OFFSET_Y, BOARD_WIDTH, BOARD_HEIGHT, rng);
+    let board = Board::initial_board(rng);
 
     // Create a new game and run it.
     let mut futris = Futris {
@@ -117,10 +117,10 @@ fn main() {
     }
 }
 
-fn draw_square(tile_size: i32, x: i32, y: i32, color: [f32; 4],
-             c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
+fn draw_square(x: i32, y: i32, color: [f32; 4],
+               c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
     use graphics::*;
-    let square = rectangle::square(0.0, 0.0, tile_size as f64);
+    let square = rectangle::square(0.0, 0.0, TILE_SIZE as f64);
     let border = rectangle::Border{
         color: [0.0, 0.0, 0.0, 1.0],
         radius: 1.0,
@@ -133,7 +133,7 @@ fn draw_square(tile_size: i32, x: i32, y: i32, color: [f32; 4],
     };
 
     let transform = c.transform
-        .trans((x * tile_size) as f64, (y * tile_size) as f64);
+        .trans((x as f64) * TILE_SIZE, (y as f64) * TILE_SIZE);
 
     rectangle.draw(square, draw_state, transform, gl);
 }
@@ -141,13 +141,9 @@ fn draw_square(tile_size: i32, x: i32, y: i32, color: [f32; 4],
 /// The board itself.
 struct Board {
     in_progress: bool,
-    dead_tiles: Vec<Box<DeadTile>>,
+    dead_tiles: [[Option<DeadTile>; BOARD_HEIGHT as usize]; BOARD_WIDTH as usize],
     tetrimino: Tetrimino,
     points: i32,
-    offset_x: i32,
-    offset_y: i32,
-    width: i32,
-    height: i32,
 }
 
 impl Board {
@@ -172,18 +168,16 @@ impl Board {
         if self.illegal_position(self.tetrimino.tiles_offset((0,1))) {
             let color = self.tetrimino.shape.color();
             for tile in self.tetrimino.tiles().iter() {
-                self.dead_tiles.push(Box::new(DeadTile {
-                    x: tile.0,
-                    y: tile.1,
+                self.dead_tiles[tile.0 as usize][tile.1 as usize] = Some(DeadTile {
                     color: color,
-                }));
+                });
             }
             // if loss:
             if self.tetrimino.y <= 0 {
                 self.in_progress = false;
             }
 
-            self.tetrimino = Board::random_tetrimino(self.width);
+            self.tetrimino = Board::random_tetrimino(BOARD_WIDTH);
 
         } else {
             self.tetrimino.y += 1;
@@ -191,51 +185,48 @@ impl Board {
     }
 
     fn illegal_position(&self, tetrimino_tiles: Vec<(i32, i32)>) -> bool {
-        tetrimino_tiles.iter().any(
-            |t| self.dead_tiles.iter().any(
-                |d| t.0 == d.x && t.1 == d.y) // collision with dead tile
+        tetrimino_tiles.iter()
+            .any(|t|
+                 // too long to the left
+                 t.0 < 0
 
-                || t.0 < 0 // too long to the left
-                || t.0 == self.width // too long to the right
-                || t.1 == self.height) // too low
+                 // too long to the right
+                 || t.0 == BOARD_WIDTH
+
+                 // too low
+                 || t.1 == BOARD_HEIGHT
+                 // collision with dead tile
+                 || self.dead_tiles[t.0 as usize][t.1 as usize].is_some())
     }
 
-    fn initial_board(offset_x: i32, offset_y: i32, width: i32, height: i32, rng: ThreadRng) -> Board {
-        let tetrimino = Board::random_tetrimino(width);
+    fn initial_board(rng: ThreadRng) -> Board {
+        let tetrimino = Board::random_tetrimino(BOARD_WIDTH);
         Board {
             in_progress: true,
-            dead_tiles: Vec::new(),
+            dead_tiles: [[None; BOARD_HEIGHT as usize]; BOARD_WIDTH as usize],
             tetrimino: tetrimino,
             points: 0,
-            offset_x: offset_x,
-            offset_y: offset_y,
-            width: width,
-            height: height,
         }
     }
 
-    fn render_board(&self, tile_size: i32, board_width: i32, board_height: i32, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
+    fn render_board(&self, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
         // 1. render playfield (i.e. the big rectangle where tetriminos are allowed to move.
-        self.draw_playfield(tile_size, board_width, board_height, c, draw_state, gl);
+        self.draw_playfield(c, draw_state, gl);
 
         // 2. render the active tetrimino
         let ref tetrimino = self.tetrimino;
-        tetrimino.draw(self.offset_x, self.offset_y, TILE_SIZE, c, draw_state, gl);
+        tetrimino.draw(c, draw_state, gl);
 
         // 3. render dead tiles
-        let ref dead_tiles: Vec<Box<DeadTile>> = self.dead_tiles;
-        for dead_tile in dead_tiles {
-            dead_tile.draw(self.offset_x, self.offset_y, TILE_SIZE, c, draw_state, gl);
-        }
-
+        self.draw_dead_tiles(c, draw_state, gl);
     }
 
-    fn draw_playfield(&self, tile_size: i32, board_width: i32, board_height: i32, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
+    fn draw_playfield(&self, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
         use graphics::*;
-        let area: [f64; 4] = [(self.offset_x * tile_size) as f64,
-                              (self.offset_y * tile_size) as f64,
-                              (board_width * tile_size) as f64,
-                              (board_height * tile_size) as f64];
+        let area: [f64; 4] = [(BOARD_OFFSET_X as f64) * TILE_SIZE ,
+                              (BOARD_OFFSET_Y as f64) * TILE_SIZE,
+                              (BOARD_WIDTH as f64) * TILE_SIZE,
+                              (BOARD_HEIGHT as f64) * TILE_SIZE];
 
         let rectangle = rectangle::Rectangle {
             color: [0.1, 0.08, 0.12, 1.0],
@@ -246,6 +237,16 @@ impl Board {
         let transform = c.transform;
 
         rectangle.draw(area, draw_state, transform, gl);
+    }
+    fn draw_dead_tiles(&self, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
+        for i in 0..BOARD_WIDTH {
+            for j in 0..BOARD_HEIGHT {
+                for dt in (self.dead_tiles[i as usize][j as usize]).iter() {
+                    draw_square(i + BOARD_OFFSET_X, j + BOARD_OFFSET_Y, dt.color, c, draw_state, gl);
+                }
+            }
+        }
+
     }
 
     fn random_tetrimino(width: i32) -> Tetrimino {
@@ -262,17 +263,10 @@ impl Board {
 }
 
 /// Tetriminos that have landed.
+#[derive(Copy, Clone)]
 struct DeadTile {
-    x: i32,
-    y: i32,
     color: [f32; 4],
 }
-
-impl DeadTile {
-   fn draw(&self, offset_x: i32, offset_y: i32, tile_size: i32, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
-       draw_square(tile_size, self.x + offset_x, self.y + offset_y, self.color, c, draw_state, gl);
-    }
- }
 
 /// The active tetrimino.
 struct Tetrimino {
@@ -283,12 +277,12 @@ struct Tetrimino {
 }
 
 impl Tetrimino {
-    fn draw(&self, offset_x: i32, offset_y: i32, tile_size: i32, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
+    fn draw(&self, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
         use graphics::*;
         for tile in &self.shape.tiles(self.rotation) {
-            let x = self.x + tile.0 + offset_x;
-            let y = self.y + tile.1 + offset_y;
-            draw_square(tile_size, x, y, self.shape.color(), c, draw_state, gl);
+            let x = self.x + tile.0 + BOARD_OFFSET_X;
+            let y = self.y + tile.1 + BOARD_OFFSET_Y;
+            draw_square(x, y, self.shape.color(), c, draw_state, gl);
         }
     }
 
