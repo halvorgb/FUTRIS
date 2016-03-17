@@ -3,7 +3,6 @@ extern crate graphics;
 extern crate glutin_window;
 extern crate opengl_graphics;
 extern crate rand;
-
 use piston::window::WindowSettings;
 use piston::event_loop::*;
 use piston::input::*;
@@ -14,15 +13,8 @@ use graphics::context::Context;
 use rand::{Rand, Rng};
 use rand::distributions::{IndependentSample, Range};
 
-const WINDOW_TITLE: &'static str = "FUTRIS";
-const TILE_SIZE: f64 = 32.0;
-const BOARD_OFFSET_X: i32 = 2;
-const BOARD_OFFSET_Y: i32 = 2;
-const BOARD_WIDTH: i32 = 10;
-const BOARD_HEIGHT: i32 = 30;
-const INITIAL_S_PER_DROP: f64 = 0.10;
-const SCORE_PER_LINE: i32 = 40;
-// const MINIMUM_S_PER_DROP: f64 = 0.05;
+mod constants;
+use constants::*;
 
 pub struct Futris {
     gl: GlGraphics, // OpenGL drawing backend.
@@ -60,15 +52,17 @@ impl Futris {
 
     fn handle_key_input(&mut self, key: keyboard::Key) -> () {
         match key {
-            Key::Up => self.board.rotate_tetrimino(),
-            Key::Left => self.board.move_tetrimino(-1),
-            Key::Down => self.board.gravity(),
-            Key::Right => self.board.move_tetrimino(1),
+            Key::Up    => self.board.move_tetrimino(Move::ROTR),
+            Key::Left  => self.board.move_tetrimino(Move::MOVL),
+            Key::Down  => self.board.move_tetrimino(Move::MOVD),
+            Key::Right => self.board.move_tetrimino(Move::MOVR),
 
-            Key::W => self.board.rotate_tetrimino(),
-            Key::A => self.board.move_tetrimino(-1),
-            Key::S => self.board.gravity(),
-            Key::D => self.board.move_tetrimino(1),
+            Key::W => self.board.move_tetrimino(Move::ROTR),
+            Key::A => self.board.move_tetrimino(Move::MOVL),
+            Key::S => self.board.move_tetrimino(Move::MOVD),
+            Key::D => self.board.move_tetrimino(Move::MOVR),
+
+            Key::Space => self.board.move_tetrimino(Move::DROP),
 
             Key::R => println!("HEY, lets restart!"),
             _ => println!("hey"),
@@ -151,7 +145,7 @@ struct Board {
 }
 
 impl Board {
-    fn initial_board() -> Board {
+    pub fn initial_board() -> Board {
         let tetrimino = Board::random_tetrimino();
         Board {
             in_progress: true,
@@ -161,23 +155,39 @@ impl Board {
         }
     }
 
+    pub fn move_tetrimino(&mut self, mov: Move) -> () {
+        if !self.in_progress {
+            return ();
+        }
+        match mov {
+            Move::ROTR => self.rotate_tetrimino(),
+            Move::MOVL => self.move_tetrimino_horizontally(-1),
+            Move::MOVD => self.gravity(),
+            Move::MOVR => self.move_tetrimino_horizontally(1),
+            Move::DROP => self.drop_tetrimino(),
+        };
+    }
+
     fn rotate_tetrimino(&mut self) -> () {
         if !self.illegal_position(self.tetrimino.tiles_rotated()) {
             self.tetrimino.rotate();
         }
     }
 
-    fn move_tetrimino(&mut self, distance: i32) -> () {
+    fn move_tetrimino_horizontally(&mut self, distance: i32) -> () {
         if !self.illegal_position(self.tetrimino.tiles_offset((distance, 0))) {
             self.tetrimino.x += distance;
         }
     }
 
-    fn gravity(&mut self) -> () {
-        if !self.in_progress {
-            return ();
+    fn drop_tetrimino(&mut self) -> () {
+        while !self.illegal_position(self.tetrimino.tiles_offset((0, 1))) {
+            self.tetrimino.y += 1;
         }
+        self.tetrimino_landed();
+    }
 
+    fn gravity(&mut self) -> () {
         // is it illegal to move the tetrimino 1 tile down?
         if self.illegal_position(self.tetrimino.tiles_offset((0, 1))) {
             self.tetrimino_landed();
@@ -279,6 +289,7 @@ impl Board {
 
         rectangle.draw(area, draw_state, transform, gl);
     }
+
     fn draw_dead_tiles(&self, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
         for i in 0..BOARD_WIDTH {
             for j in 0..BOARD_HEIGHT {
@@ -470,4 +481,12 @@ impl Rand for Shape {
             _ => panic!("what"),
         }
     }
+}
+
+enum Move {
+    MOVL,
+    MOVR,
+    MOVD,
+    DROP,
+    ROTR,
 }
