@@ -21,7 +21,8 @@ const BOARD_OFFSET_Y: i32 = 2;
 const BOARD_WIDTH: i32 = 10;
 const BOARD_HEIGHT: i32 = 30;
 const INITIAL_S_PER_DROP: f64 = 0.10;
-//const MINIMUM_S_PER_DROP: f64 = 0.05;
+const SCORE_PER_LINE: i32 = 40;
+// const MINIMUM_S_PER_DROP: f64 = 0.05;
 
 pub struct Futris {
     gl: GlGraphics, // OpenGL drawing backend.
@@ -73,7 +74,6 @@ impl Futris {
             _ => println!("hey"),
         }
     }
-
 }
 
 fn main() {
@@ -82,10 +82,10 @@ fn main() {
 
     // Create an Glutin window.
     let mut window: Window = WindowSettings::new(WINDOW_TITLE, [200, 200])
-                                 .opengl(opengl)
-                                 .exit_on_esc(true)
-                                 .build()
-                                 .unwrap();
+        .opengl(opengl)
+        .exit_on_esc(true)
+        .build()
+        .unwrap();
 
 
     let board = Board::initial_board();
@@ -116,11 +116,16 @@ fn main() {
     }
 }
 
-fn draw_square(x: i32, y: i32, color: [f32; 4],
-               c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
+fn draw_square(x: i32,
+               y: i32,
+               color: [f32; 4],
+               c: Context,
+               draw_state: &DrawState,
+               gl: &mut GlGraphics)
+               -> () {
     use graphics::*;
     let square = rectangle::square(0.0, 0.0, TILE_SIZE as f64);
-    let border = rectangle::Border{
+    let border = rectangle::Border {
         color: [0.0, 0.0, 0.0, 1.0],
         radius: 1.0,
     };
@@ -142,10 +147,20 @@ struct Board {
     in_progress: bool,
     dead_tiles: [[Option<DeadTile>; BOARD_HEIGHT as usize]; BOARD_WIDTH as usize],
     tetrimino: Tetrimino,
-    points: i32,
+    score: i32,
 }
 
 impl Board {
+    fn initial_board() -> Board {
+        let tetrimino = Board::random_tetrimino();
+        Board {
+            in_progress: true,
+            dead_tiles: [[None; BOARD_HEIGHT as usize]; BOARD_WIDTH as usize],
+            tetrimino: tetrimino,
+            score: 0,
+        }
+    }
+
     fn rotate_tetrimino(&mut self) -> () {
         if !self.illegal_position(self.tetrimino.tiles_rotated()) {
             self.tetrimino.rotate();
@@ -160,29 +175,66 @@ impl Board {
 
     fn gravity(&mut self) -> () {
         if !self.in_progress {
-            return ()
+            return ();
         }
 
         // is it illegal to move the tetrimino 1 tile down?
-        if self.illegal_position(self.tetrimino.tiles_offset((0,1))) {
-            let color = self.tetrimino.shape.color();
-            for tile in self.tetrimino.tiles().iter() {
-                self.dead_tiles[tile.0 as usize][tile.1 as usize] = Some(DeadTile {
-                    color: color,
-                });
-            }
-            // if loss:
-            if self.tetrimino.y <= 0 {
-                self.in_progress = false;
-            }
-
-            self.tetrimino = Board::random_tetrimino(BOARD_WIDTH);
-
+        if self.illegal_position(self.tetrimino.tiles_offset((0, 1))) {
+            self.tetrimino_landed();
         } else {
             self.tetrimino.y += 1;
         }
     }
 
+    fn tetrimino_landed(&mut self) -> () {
+        // spawn dead tiles.
+        let color = self.tetrimino.shape.color();
+        for tile in self.tetrimino.tiles().iter() {
+            self.dead_tiles[tile.0 as usize][tile.1 as usize] = Some(DeadTile { color: color });
+        }
+        // if loss:
+        if self.tetrimino.tiles().iter().any(|t| t.1 <= 0) {
+            self.in_progress = false;
+        } else {
+            // check if tetris achieved.
+            let mut lines = 0;
+            let mut highest_y = 0; // highest index, lowest (visual) line.
+
+            'outer: for y in 0..BOARD_HEIGHT {
+                if (0..BOARD_WIDTH).all(|x| self.dead_tiles[x as usize][y as usize].is_some()) {
+                    lines += 1;
+
+                    if y > highest_y {
+                        highest_y = y;
+                    }
+
+                    if lines == 4 {
+                        break 'outer; // 4 is the max amount of lines possible.
+                    }
+                }
+            }
+
+            if lines > 0 {
+                // move down stuff
+                for i in 0..(highest_y) {
+                    let old_y = (highest_y) - i;
+                    let new_y = old_y - lines;
+                    for x in 0..BOARD_WIDTH {
+                        let old = self.dead_tiles[x as usize][new_y as usize];
+
+                        self.dead_tiles[x as usize][old_y as usize] = old;
+
+                    }
+                }
+                // add to score.
+                self.score += lines*lines*SCORE_PER_LINE;
+            }
+
+        }
+        // spawn new tetrimino.
+        self.tetrimino = Board::random_tetrimino();
+
+    }
     fn illegal_position(&self, tetrimino_tiles: Vec<(i32, i32)>) -> bool {
         tetrimino_tiles.iter()
             .any(|t|
@@ -196,16 +248,6 @@ impl Board {
                  || t.1 == BOARD_HEIGHT
                  // collision with dead tile
                  || self.dead_tiles[t.0 as usize][t.1 as usize].is_some())
-    }
-
-    fn initial_board() -> Board {
-        let tetrimino = Board::random_tetrimino(BOARD_WIDTH);
-        Board {
-            in_progress: true,
-            dead_tiles: [[None; BOARD_HEIGHT as usize]; BOARD_WIDTH as usize],
-            tetrimino: tetrimino,
-            points: 0,
-        }
     }
 
     fn render_board(&self, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
@@ -222,7 +264,7 @@ impl Board {
 
     fn draw_playfield(&self, c: Context, draw_state: &DrawState, gl: &mut GlGraphics) -> () {
         use graphics::*;
-        let area: [f64; 4] = [(BOARD_OFFSET_X as f64) * TILE_SIZE ,
+        let area: [f64; 4] = [(BOARD_OFFSET_X as f64) * TILE_SIZE,
                               (BOARD_OFFSET_Y as f64) * TILE_SIZE,
                               (BOARD_WIDTH as f64) * TILE_SIZE,
                               (BOARD_HEIGHT as f64) * TILE_SIZE];
@@ -241,19 +283,22 @@ impl Board {
         for i in 0..BOARD_WIDTH {
             for j in 0..BOARD_HEIGHT {
                 for dt in (self.dead_tiles[i as usize][j as usize]).iter() {
-                    draw_square(i + BOARD_OFFSET_X, j + BOARD_OFFSET_Y, dt.color, c, draw_state, gl);
+                    draw_square(i + BOARD_OFFSET_X,
+                                j + BOARD_OFFSET_Y,
+                                dt.color,
+                                c,
+                                draw_state,
+                                gl);
                 }
             }
         }
-
     }
 
-    fn random_tetrimino(width: i32) -> Tetrimino {
-
+    fn random_tetrimino() -> Tetrimino {
         let mut rng = rand::thread_rng();
         let shape: Shape = rng.gen::<Shape>();
         Tetrimino {
-            x: shape.origin(width),
+            x: shape.origin(),
             y: 0,
             shape: shape,
             rotation: 0,
@@ -285,13 +330,15 @@ impl Tetrimino {
     }
 
     fn tiles(&self) -> Vec<(i32, i32)> {
-        self.shape.tiles(self.rotation)
+        self.shape
+            .tiles(self.rotation)
             .iter()
             .map(|t| (t.0 + self.x, t.1 + self.y))
             .collect()
     }
     fn tiles_offset(&self, offset: (i32, i32)) -> Vec<(i32, i32)> {
-        self.shape.tiles(self.rotation)
+        self.shape
+            .tiles(self.rotation)
             .iter()
             .map(|t| (t.0 + self.x + offset.0, t.1 + self.y + offset.1))
             .collect()
@@ -303,12 +350,12 @@ impl Tetrimino {
 
     // rotation
     fn tiles_rotated(&self) -> Vec<(i32, i32)> {
-        self.shape.tiles((self.rotation+1) % 4)
+        self.shape
+            .tiles((self.rotation + 1) % 4)
             .iter()
             .map(|t| (t.0 + self.x, t.1 + self.y))
             .collect()
     }
-
 }
 enum Shape {
     I,
@@ -335,62 +382,76 @@ impl Shape {
 
     fn tiles(&self, rotation: i32) -> Vec<(i32, i32)> {
         match *self {
-            Shape::I => match rotation {
-                0 => vec![(0, 1), (1, 1), (2, 1), (3, 1)],
-                1 => vec![(2, 0), (2, 1), (2, 2), (2, 3)],
-                2 => vec![(0, 2), (1, 2), (2, 2), (3, 2)],
-                _ => vec![(1, 0), (1, 1), (1, 2), (1, 3)],
-            },
-            Shape::O => match rotation {
-                _ => vec![(1, 0), (2, 0),(1, 1), (2,1)],
-            },
+            Shape::I => {
+                match rotation {
+                    0 => vec![(0, 1), (1, 1), (2, 1), (3, 1)],
+                    1 => vec![(2, 0), (2, 1), (2, 2), (2, 3)],
+                    2 => vec![(0, 2), (1, 2), (2, 2), (3, 2)],
+                    _ => vec![(1, 0), (1, 1), (1, 2), (1, 3)],
+                }
+            }
+            Shape::O => {
+                match rotation {
+                    _ => vec![(1, 0), (2, 0), (1, 1), (2, 1)],
+                }
+            }
 
-            Shape::T => match rotation {
-                0 => vec![(1, 0), (0, 1), (1, 1), (2, 1)],
-                1 => vec![(1, 0), (1, 1), (1, 2), (2, 1)],
-                2 => vec![(0, 1), (1, 1), (2, 1), (1, 2)],
-                _ => vec![(1, 0), (1, 1), (1, 2), (0, 1)],
-            },
+            Shape::T => {
+                match rotation {
+                    0 => vec![(1, 0), (0, 1), (1, 1), (2, 1)],
+                    1 => vec![(1, 0), (1, 1), (1, 2), (2, 1)],
+                    2 => vec![(0, 1), (1, 1), (2, 1), (1, 2)],
+                    _ => vec![(1, 0), (1, 1), (1, 2), (0, 1)],
+                }
+            }
 
-            Shape::S => match rotation {
-                0 => vec![(1, 0), (2, 0), (0, 1), (1, 1)],
-                1 => vec![(1, 0), (1, 1), (2, 1), (2, 2)],
-                2 => vec![(1, 1), (2, 1), (0, 2), (1, 2)],
-                _ => vec![(0, 0), (0, 1), (1, 1), (1, 2)],
-            },
+            Shape::S => {
+                match rotation {
+                    0 => vec![(1, 0), (2, 0), (0, 1), (1, 1)],
+                    1 => vec![(1, 0), (1, 1), (2, 1), (2, 2)],
+                    2 => vec![(1, 1), (2, 1), (0, 2), (1, 2)],
+                    _ => vec![(0, 0), (0, 1), (1, 1), (1, 2)],
+                }
+            }
 
-            Shape::Z => match rotation {
-                0 => vec![(0, 0), (1, 0), (1, 1), (2, 1)],
-                1 => vec![(2, 0), (2, 1), (1, 1), (1, 2)],
-                2 => vec![(0, 1), (1, 1), (1, 2), (2, 2)],
-                _ => vec![(1, 0), (1, 1), (0, 1), (0, 2)],
-            },
+            Shape::Z => {
+                match rotation {
+                    0 => vec![(0, 0), (1, 0), (1, 1), (2, 1)],
+                    1 => vec![(2, 0), (2, 1), (1, 1), (1, 2)],
+                    2 => vec![(0, 1), (1, 1), (1, 2), (2, 2)],
+                    _ => vec![(1, 0), (1, 1), (0, 1), (0, 2)],
+                }
+            }
 
-            Shape::J => match rotation {
-                0 => vec![(0, 0), (0, 1), (1, 1), (2, 1)],
-                1 => vec![(1, 0), (2, 0), (1, 1), (1, 2)],
-                2 => vec![(0, 1), (1, 1), (2, 1), (2, 2)],
-                _ => vec![(2, 0), (2, 1), (2, 2), (1, 2)],
-            },
+            Shape::J => {
+                match rotation {
+                    0 => vec![(0, 0), (0, 1), (1, 1), (2, 1)],
+                    1 => vec![(1, 0), (2, 0), (1, 1), (1, 2)],
+                    2 => vec![(0, 1), (1, 1), (2, 1), (2, 2)],
+                    _ => vec![(2, 0), (2, 1), (2, 2), (1, 2)],
+                }
+            }
 
-            Shape::L => match rotation {
-                0 => vec![(2, 0), (0, 1), (1, 1), (2, 1)],
-                1 => vec![(1, 0), (1, 1), (1, 2), (2, 2)],
-                2 => vec![(0, 1), (1, 1), (2, 1), (0, 2)],
-                _ => vec![(0, 0), (1, 0), (1, 1), (1, 2)],
-            },
+            Shape::L => {
+                match rotation {
+                    0 => vec![(2, 0), (0, 1), (1, 1), (2, 1)],
+                    1 => vec![(1, 0), (1, 1), (1, 2), (2, 2)],
+                    2 => vec![(0, 1), (1, 1), (2, 1), (0, 2)],
+                    _ => vec![(0, 0), (1, 0), (1, 1), (1, 2)],
+                }
+            }
         }
     }
 
-    fn origin(&self, board_width: i32) -> i32 {
+    fn origin(&self) -> i32 {
         match *self {
-            Shape::I => board_width/2 - 2,
-            Shape::O => board_width/2 - 2,
-            Shape::T => board_width/2 - 2,
-            Shape::S => board_width/2 - 1,
-            Shape::Z => board_width/2 - 2,
-            Shape::J => board_width/2 - 2,
-            Shape::L => board_width/2 - 2,
+            Shape::I => BOARD_WIDTH / 2 - 2,
+            Shape::O => BOARD_WIDTH / 2 - 2,
+            Shape::T => BOARD_WIDTH / 2 - 2,
+            Shape::S => BOARD_WIDTH / 2 - 1,
+            Shape::Z => BOARD_WIDTH / 2 - 2,
+            Shape::J => BOARD_WIDTH / 2 - 2,
+            Shape::L => BOARD_WIDTH / 2 - 2,
         }
     }
 }
