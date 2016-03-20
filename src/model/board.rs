@@ -81,43 +81,44 @@ impl Board {
         if self.tetrimino.tiles().iter().any(|t| t.1 <= 0) {
             self.in_progress = false;
         } else {
-            // check if tetris achieved.
-            let mut lines = 0;
-            let mut highest_y = 0; // highest index, lowest (visual) line.
+            // keep track of the full lines.
+            let mut lines: Vec<(i32)> = Vec::new();
 
             'outer: for y in 0..BOARD_HEIGHT {
                 if (0..BOARD_WIDTH).all(|x| self.dead_tiles[x as usize][y as usize].is_some()) {
-                    lines += 1;
+                    lines.push(y);
 
-                    if y > highest_y {
-                        highest_y = y;
-                    }
-
-                    if lines == 4 {
+                    if lines.len() == 4 {
                         break 'outer; // 4 is the max amount of lines possible.
                     }
                 }
             }
+            let nof_lines = lines.len();
 
-            if lines > 0 {
+            if nof_lines > 0 {
                 // move down stuff
-                for i in 0..(highest_y + 1) {
-                    let old_y = highest_y - i;
-                    let new_y = old_y - lines;
-                    for x in 0..BOARD_WIDTH {
+                for line in lines {
+                    // line is an i32 y index of where line was "gained"
+                    for i in 0..(line+1) {
+                        let old_y = line - i;
+                        let new_y = old_y - 1;
+                        for x in 0..BOARD_WIDTH {
+                            // copy from above, but only if there's something to copy.
+                            let old = if new_y >= 0 {
+                                self.dead_tiles[x as usize][new_y as usize]
+                            } else {
+                                None
+                            };
 
-                        // copy from above, but only if there's something to copy.
-                        let old = if new_y >= 0 {
-                            self.dead_tiles[x as usize][new_y as usize]
-                        } else {
-                            None
-                        };
+                            self.dead_tiles[x as usize][old_y as usize] = old;
+                        }
 
-                        self.dead_tiles[x as usize][old_y as usize] = old;
                     }
+
+
                 }
                 // add to score.
-                self.score += lines*lines*SCORE_PER_LINE;
+                self.score += (nof_lines*nof_lines) as i32 *SCORE_PER_LINE;
             }
 
         }
