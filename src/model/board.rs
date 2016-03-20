@@ -101,14 +101,19 @@ impl Board {
 
             if lines > 0 {
                 // move down stuff
-                for i in 0..(highest_y) {
-                    let old_y = (highest_y) - i;
+                for i in 0..(highest_y + 1) {
+                    let old_y = highest_y - i;
                     let new_y = old_y - lines;
                     for x in 0..BOARD_WIDTH {
-                        let old = self.dead_tiles[x as usize][new_y as usize];
+
+                        // copy from above, but only if there's something to copy.
+                        let old = if new_y >= 0 {
+                            self.dead_tiles[x as usize][new_y as usize]
+                        } else {
+                            None
+                        };
 
                         self.dead_tiles[x as usize][old_y as usize] = old;
-
                     }
                 }
                 // add to score.
